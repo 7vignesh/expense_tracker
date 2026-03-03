@@ -1,7 +1,8 @@
 # Expense Tracker
 
-A small full-stack expense-tracking application built to demonstrate
-structure, validation, testability, and resilience to change — not feature count.
+This is a cozy little expense tracker with a modern React/Vite frontend and a Flask-based
+API. It is intentionally focused on layering concerns, keeping money safe as cents, and
+making it easy to reason about validation, testing, and incremental polish.
 
 ---
 
@@ -17,36 +18,30 @@ structure, validation, testability, and resilience to change — not feature cou
 
 ---
 
-## Running Locally
+## Running locally
 
-### Backend
+Start the backend and frontend in separate terminals:
 
 ```bash
 cd backend
 pip install -r requirements.txt
 python run.py
-# API available at http://localhost:5000
 ```
-
-### Frontend
 
 ```bash
 cd frontend
 npm install
 npm run dev
-# UI available at http://localhost:3000
 ```
 
-The Vite dev server proxies `/api/*` to `localhost:5000`, so no CORS
-config or hard-coded URLs are needed in the frontend.
+Vite proxies `/api/*` to the Flask server, so the frontend only talks to relative paths.
 
-### Tests
+To exercise the backend tests:
 
 ```bash
 cd backend
-pytest            # all tests
-pytest -v         # verbose
-pytest -k expense # filter by name
+pytest        # all tests
+pytest -k expense   # focus on the expense flow
 ```
 
 ---
@@ -57,14 +52,16 @@ pytest -k expense # filter by name
 backend/
 ├── app/
 │   ├── __init__.py        # App factory (Flask + SQLAlchemy + Marshmallow)
-│   ├── models.py          # SQLAlchemy models (Category, Expense)
+│   ├── models.py          # SQLAlchemy models (Category, Expense, User)
 │   ├── schemas.py         # Marshmallow schemas — validation + serialization
 │   ├── errors.py          # Centralised error types + handlers
 │   ├── routes/
+│   │   ├── auth.py        # /api/auth endpoints
 │   │   ├── categories.py  # /api/categories endpoints
 │   │   ├── expenses.py    # /api/expenses endpoints
 │   │   └── health.py      # /health endpoint
 │   └── services/
+│       ├── auth_service.py
 │       ├── category_service.py
 │       └── expense_service.py
 ├── tests/
@@ -160,26 +157,25 @@ in the browser.
 
 ---
 
-## AI Usage
+## AI usage
 
-AI assistance (GitHub Copilot / Claude) was used for:
+Most of the work was hand-crafted, but AI tools helped scaffold repetitive
+pieces like schema definitions, test fixtures, and the elaborate CSS.
+Every AI-suggested snippet was reviewed and aligned with the rules detailed in
+`claude.md` before landing in the repo.
 
-- Generating boilerplate (schema field declarations, test fixtures)
-- Suggesting test case names for edge cases
-- Writing CSS
+For transparency, here are the checks that guard against the usual
+pitfalls:
 
-All AI-generated code was reviewed against the rules in `claude.md`
-before being committed.  The key risks and the mitigations applied:
-
-| Risk | What was checked |
+| Risk | What was verified |
 |---|---|
-| AI puts logic in routes | Ensured routes only call `schema.load` → `service.*` → `schema.dump` |
-| AI uses floats for money | Verified `amount_cents` integer path end-to-end, test `test_amount_stored_as_exact_decimal` |
-| AI adds bare `except` | Grep for `except Exception` — only in `app/errors.py` (the handler) |
-| AI duplicates validation | Checked no `if amount <= 0` in services or routes |
+| Logic sneaks into routes | Routes only orchestrate schemas → services → schema dumps |
+| Money stored as floats | `amount_cents` stays an integer and tests validate that path |
+| Bare `except` blocks | Grepped for `except Exception` and found none outside `app/errors.py` |
+| Validation scattered across layers | Inputs are gatekept by the schemas, not routes or services |
 
-The files `claude.md` and `agents.md` were written first and used as
-the system prompt context when invoking AI agents.
+The policy files (`claude.md`, `agents.md`) were drafted before calling any
+AI-assisted edits so the agents had strict guardrails.
 
 ---
 
@@ -187,21 +183,22 @@ the system prompt context when invoking AI agents.
 
 ### Weaknesses
 
-- **No authentication** — all data is globally visible. Adding JWT
-  middleware + a `User` model is the natural next step.
-- **SQLite in dev has no enforcement by default** — the service-layer
-  guard (`NotFoundError` on unknown category) compensates, but a prod
-  deployment should use Postgres which enforces FKs natively.
-- **No pagination** — large datasets will slow the expense list query.
+- **Auth is basic** — JWT protects the current user but there is still no
+  onboarding flow or refresh tokens.
+- **SQLite in dev lacks FK enforcement** — the service layer protects the
+  integrity, but PostgreSQL in prod would enforce cascades and constraints by
+  default.
+- **No pagination** — the `expenses` list loads everything, so large datasets
+  may slow down the UI.
 
-### How to Extend
+### How to extend
 
 | Feature | Where to add it |
 |---|---|
 | Edit an expense | `expense_service.update_expense` + `PATCH /api/expenses/<id>` + schema |
 | Monthly budget per category | `budget_cents` on `Category` model + `get_budget_status` service |
 | CSV export | `GET /api/expenses/export` route + `csv` stdlib |
-| Authentication | Flask-JWT-Extended middleware + `User` model + token validation |
+| Authentication | Already wired: JWT middleware, `User` model, login + register UI |
 | Postgres in prod | Set `DATABASE_URL` env var — SQLAlchemy handles the rest |
 
 Follow the agent workflow in `agents.md` for any of the above so that

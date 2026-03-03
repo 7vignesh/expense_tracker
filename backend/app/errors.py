@@ -38,6 +38,11 @@ class ConflictError(AppError):
         super().__init__(message, status_code=409)
 
 
+class ForbiddenError(AppError):
+    def __init__(self, message: str = "You do not have permission to perform this action.") -> None:
+        super().__init__(message, status_code=403)
+
+
 def register_error_handlers(app: Flask) -> None:
     @app.errorhandler(AppError)
     def handle_app_error(exc: AppError):

@@ -10,9 +10,11 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
 from flask_cors import CORS
+from flask_jwt_extended import JWTManager
 
 db = SQLAlchemy()
 ma = Marshmallow()
+jwt = JWTManager()
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +32,7 @@ def create_app(config_override: object | None = None) -> Flask:
     # ── Extensions ────────────────────────────────────────────────────────────
     db.init_app(app)
     ma.init_app(app)
+    jwt.init_app(app)
     CORS(app, resources={r"/api/*": {"origins": "*"}})
 
     # ── Logging ───────────────────────────────────────────────────────────────
@@ -39,11 +42,13 @@ def create_app(config_override: object | None = None) -> Flask:
     )
 
     # ── Blueprints ────────────────────────────────────────────────────────────
+    from app.routes.auth import bp as auth_bp
     from app.routes.categories import bp as categories_bp
     from app.routes.expenses import bp as expenses_bp
     from app.routes.health import bp as health_bp
 
     app.register_blueprint(health_bp)
+    app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(categories_bp, url_prefix="/api/categories")
     app.register_blueprint(expenses_bp, url_prefix="/api/expenses")
 

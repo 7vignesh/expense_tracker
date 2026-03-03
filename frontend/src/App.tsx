@@ -1,18 +1,29 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Category, Expense, Summary } from "./types";
-import { categoriesApi, expensesApi, type ExpenseFilters } from "./api";
+import { categoriesApi, expensesApi, type ExpenseFilters, tokenStore, registerUnauthorizedHandler } from "./api";
 import { CategoryManager } from "./components/CategoryManager";
 import { ExpenseForm } from "./components/ExpenseForm";
 import { ExpenseList } from "./components/ExpenseList";
 import { SummaryPanel } from "./components/SummaryPanel";
+import { AuthForm } from "./components/AuthForm";
 import "./styles.css";
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(() => !!tokenStore.get());
   const [categories, setCategories] = useState<Category[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [summary, setSummary] = useState<Summary>({ total: "0.00", by_category: {} });
   const [filters, setFilters] = useState<ExpenseFilters>({});
   const [globalError, setGlobalError] = useState<string | null>(null);
+
+  useEffect(() => {
+    registerUnauthorizedHandler(() => {
+      setIsAuthenticated(false);
+      setCategories([]);
+      setExpenses([]);
+      setSummary({ total: "0.00", by_category: {} });
+    });
+  }, []);
 
   const loadCategories = useCallback(async () => {
     try {
@@ -39,10 +50,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
     void loadCategories();
     void loadExpenses();
     void loadSummary();
-  }, [loadCategories, loadExpenses, loadSummary]);
+  }, [isAuthenticated, loadCategories, loadExpenses, loadSummary]);
 
   function handleFiltersChanged(f: ExpenseFilters) {
     setFilters(f);
@@ -52,6 +64,28 @@ export default function App() {
   function handleExpenseChanged() {
     void loadExpenses(filters);
     void loadSummary();
+  }
+
+  function handleLogout() {
+    tokenStore.clear();
+    setIsAuthenticated(false);
+    setCategories([]);
+    setExpenses([]);
+    setSummary({ total: "0.00", by_category: {} });
+    setGlobalError(null);
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <>
+        <div className="bg-scene" aria-hidden="true">
+          <div className="orb orb-1" />
+          <div className="orb orb-2" />
+          <div className="orb orb-3" />
+        </div>
+        <AuthForm onAuthenticated={() => setIsAuthenticated(true)} />
+      </>
+    );
   }
 
   return (
@@ -66,6 +100,14 @@ export default function App() {
       <div className="page-header">
         <div className="page-header-icon">💸</div>
         <h1>Expense Tracker</h1>
+        <button
+          type="button"
+          className="btn btn-ghost"
+          style={{ marginLeft: "auto" }}
+          onClick={handleLogout}
+        >
+          Sign Out
+        </button>
       </div>
 
       {globalError && (

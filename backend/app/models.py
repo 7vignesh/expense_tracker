@@ -16,7 +16,39 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
+from werkzeug.security import check_password_hash, generate_password_hash
+
 from app import db
+
+
+class User(db.Model):
+    """
+    Application user.  Passwords are stored as bcrypt hashes via werkzeug
+    (already a Flask dependency — no extra package required).
+    The plaintext password is never persisted.
+    """
+
+    __tablename__ = "users"
+
+    id: int = db.Column(db.Integer, primary_key=True)
+    username: str = db.Column(db.String(80), nullable=False, unique=True)
+    password_hash: str = db.Column(db.String(256), nullable=False)
+    created_at: datetime = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    expenses = db.relationship("Expense", back_populates="owner", lazy="dynamic")
+
+    def set_password(self, plaintext: str) -> None:
+        self.password_hash = generate_password_hash(plaintext)
+
+    def check_password(self, plaintext: str) -> bool:
+        return check_password_hash(self.password_hash, plaintext)
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"<User id={self.id} username={self.username!r}>"
 
 
 class Category(db.Model):
@@ -49,6 +81,10 @@ class Expense(db.Model):
     category_id: int = db.Column(
         db.Integer, db.ForeignKey("categories.id"), nullable=False
     )
+    # Every expense is owned by exactly one user
+    user_id: int = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False
+    )
     created_at: datetime = db.Column(
         db.DateTime(timezone=True),
         nullable=False,
@@ -56,6 +92,7 @@ class Expense(db.Model):
     )
 
     category = db.relationship("Category", back_populates="expenses")
+    owner = db.relationship("User", back_populates="expenses")
 
     @property
     def amount(self) -> "Decimal":

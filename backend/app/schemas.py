@@ -29,7 +29,7 @@ from marshmallow import (
 from marshmallow_sqlalchemy import SQLAlchemyAutoSchema
 
 from app import ma
-from app.models import Category, Expense
+from app.models import Category, Expense, User
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -130,3 +130,46 @@ category_schema = CategorySchema()
 categories_schema = CategorySchema(many=True)
 expense_schema = ExpenseSchema()
 expenses_schema = ExpenseSchema(many=True)
+
+
+# ── User / Auth ────────────────────────────────────────────────
+
+
+class UserSchema(ma.Schema):
+    """
+    Handles registration and login payloads.
+    `password` is write-only: it is never returned in responses.
+    `password_hash` is never exposed to the client.
+    """
+
+    id = fields.Int(dump_only=True)
+    username = fields.Str(
+        required=True,
+        validate=validate.Length(min=3, max=80),
+    )
+    # load_only ensures the password is never serialised in responses
+    password = fields.Str(
+        required=True,
+        load_only=True,
+        validate=validate.Length(
+            min=8, error="Password must be at least 8 characters."
+        ),
+    )
+    created_at = fields.DateTime(dump_only=True)
+
+    @pre_load
+    def strip_username(self, data: dict, **kwargs) -> dict:
+        if isinstance(data.get("username"), str):
+            data["username"] = data["username"].strip().lower()
+        return data
+
+    @validates("username")
+    def validate_username(self, value: str) -> None:
+        import re
+        if not re.match(r"^[a-z0-9_]+$", value):
+            raise ValidationError(
+                "Username may only contain lowercase letters, digits, and underscores."
+            )
+
+
+user_schema = UserSchema()

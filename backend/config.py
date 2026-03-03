@@ -18,11 +18,17 @@ class Config:
     TESTING: bool = False
     # Keep JSON keys in insertion order; improves predictability in tests
     JSON_SORT_KEYS: bool = False
+    # Override JWT_SECRET_KEY via environment variable in production!
+    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "dev-secret-change-in-prod")
+    # Tokens expire after 8 hours by default
+    JWT_ACCESS_TOKEN_EXPIRES: int = int(os.getenv("JWT_TOKEN_EXPIRY_HOURS", "8")) * 3600
 
 
 class TestingConfig(Config):
     TESTING = True
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
+    JWT_SECRET_KEY = "test-secret-key-at-least-32-bytes-long!"
+    JWT_ACCESS_TOKEN_EXPIRES = 3600
 
 
 CONFIG_MAP: dict[str, type[Config]] = {

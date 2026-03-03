@@ -38,8 +38,27 @@ def client(app, db):
 
 
 @pytest.fixture
-def category(client):
+def auth_headers(client):
+    """Register a test user, log in, and return bearer headers."""
+    client.post(
+        "/api/auth/register",
+        json={"username": "testuser", "password": "testpassword123"},
+    )
+    resp = client.post(
+        "/api/auth/login",
+        json={"username": "testuser", "password": "testpassword123"},
+    )
+    token = resp.get_json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def category(client, auth_headers):
     """Create a seeded category and return its JSON payload."""
-    resp = client.post("/api/categories/", json={"name": "Food"})
+    resp = client.post(
+        "/api/categories/",
+        json={"name": "Food"},
+        headers=auth_headers,
+    )
     assert resp.status_code == 201
     return resp.get_json()

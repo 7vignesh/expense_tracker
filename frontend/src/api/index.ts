@@ -6,23 +6,57 @@
  *   - swap the base URL
  *   - add auth headers globally
  *   - mock the entire API layer in tests
+ *
+ * Token management:
+ *   - Access token is stored in localStorage.
+ *   - Every request automatically attaches `Authorization: Bearer <token>`.
+ *   - If the server returns 401, `onUnauthorized` is called so App.tsx can
+ *     clear the auth state and redirect to the login screen.
  */
 
 import type { Category, Expense, Summary } from "../types";
 
 const BASE = "/api";
 
+// ── Token helpers ─────────────────────────────────────────────────────────────
+
+const TOKEN_KEY = "access_token";
+
+export const tokenStore = {
+  get: (): string | null => localStorage.getItem(TOKEN_KEY),
+  set: (t: string): void => localStorage.setItem(TOKEN_KEY, t),
+  clear: (): void => localStorage.removeItem(TOKEN_KEY),
+};
+
+/** App.tsx registers this to handle 401 → log-out redirect. */
+let onUnauthorized: (() => void) | null = null;
+export function registerUnauthorizedHandler(fn: () => void) {
+  onUnauthorized = fn;
+}
+
+// ── Core fetch wrapper ────────────────────────────────────────────────────────
+
 async function request<T>(
   path: string,
   options?: RequestInit
 ): Promise<T> {
-  const response = await fetch(`${BASE}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options?.headers,
-    },
-  });
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options?.headers as Record<string, string>),
+  };
+
+  const token = tokenStore.get();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${BASE}${path}`, { ...options, headers });
+
+  if (response.status === 401) {
+    tokenStore.clear();
+    onUnauthorized?.();
+    throw { error: "Session expired. Please log in again." };
+  }
 
   if (response.status === 204) {
     return undefined as unknown as T;
@@ -31,12 +65,30 @@ async function request<T>(
   const data = await response.json();
 
   if (!response.ok) {
-    // Throw with the server's error payload so callers can display it
     throw data;
   }
 
   return data as T;
 }
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+
+export const authApi = {
+  register: (username: string, password: string) =>
+    request<{ id: number; username: string }>("/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    }),
+
+  login: async (username: string, password: string): Promise<string> => {
+    const data = await request<{ access_token: string }>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    });
+    tokenStore.set(data.access_token);
+    return data.access_token;
+  },
+};
 
 // ── Categories ────────────────────────────────────────────────────────────────
 
